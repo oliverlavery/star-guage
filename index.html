@@ -187,6 +187,12 @@
             background: rgba(210, 168, 255, 0.35);
             border-color: var(--purple);
         }
+        .cell.preview {
+            background: rgba(88, 166, 255, 0.4);
+            border-color: var(--accent);
+            color: #fff;
+            z-index: 1;
+        }
         .cell.central {
             color: var(--green);
             font-weight: bold;
@@ -343,8 +349,27 @@
         @media (max-width: 900px) {
             .main { flex-direction: column; }
             .sidebar { width: auto; border-left: none; border-top: 1px solid var(--border); max-height: 50vh; }
-            .grid-container { grid-template-columns: repeat(29, 28px); grid-template-rows: repeat(29, 28px); gap: 1px; }
-            .cell { font-size: 0.85rem; }
+            .grid-panel { overflow-x: auto; padding: 0.75rem; align-items: flex-start; -webkit-overflow-scrolling: touch; }
+            .grid-container { grid-template-columns: repeat(29, 26px); grid-template-rows: repeat(29, 26px); gap: 1px; }
+            .cell { font-size: 0.8rem; }
+            header { padding: 1rem; flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+            .controls { width: 100%; }
+            h1 { font-size: 1.1rem; }
+            h1 span { display: none; }
+        }
+        .grid-help {
+            margin-top: 0.75rem;
+            font-size: 0.75rem;
+            color: var(--muted);
+            line-height: 1.5;
+            text-align: center;
+            max-width: 600px;
+        }
+        @media (max-width: 600px) {
+            .grid-help { display: none; }
+            .grid-container { grid-template-columns: repeat(29, 22px); grid-template-rows: repeat(29, 22px); }
+            .cell { font-size: 0.68rem; }
+            .sidebar { max-height: 40vh; }
         }
     </style>
 </head>
@@ -358,7 +383,7 @@
             <option value="openrouter">OpenRouter (public)</option>
         </select>
         <label id="hostLabel">Ollama Host</label>
-        <input type="text" id="hostInput" value="127.0.0.1:11434" placeholder="host:port">
+        <input type="text" id="hostInput" value="shadow.bonobo-dragon.ts.net:11434" placeholder="host:port">
         <label id="keyLabel" style="display:none">OpenRouter Key</label>
         <input type="password" id="apiKeyInput" placeholder="sk-or-v1-…" style="display:none;min-width:180px;">
         <label id="modelLabel">Model</label>
@@ -381,8 +406,8 @@
             <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Blue (navy)</div>
         </div>
         <div class="grid-container" id="grid"></div>
-        <div class="grid-help" style="margin-top:0.75rem;font-size:0.75rem;color:var(--muted);line-height:1.5;text-align:center;max-width:600px;">
-            <strong>Click</strong> characters to select · <strong>Option+click</strong> (Mac) or <strong>Alt+click</strong> (Windows/Linux) to select a straight line (horizontal, vertical, or diagonal) from your last selected character · <strong>Shift+click</strong> also works for line selection · <kbd>Esc</kbd> to clear · <kbd>Ctrl+Enter</kbd> to translate
+        <div class="grid-help">
+            <strong>Click / tap</strong> characters to select &nbsp;·&nbsp; <strong>Drag</strong> across cells to select a line on touchscreens &nbsp;·&nbsp; <strong>Option+click</strong> or <strong>Alt+click</strong> to select a straight line with a mouse &nbsp;·&nbsp; <kbd>Esc</kbd> to clear &nbsp;·&nbsp; <kbd>Ctrl+Enter</kbd> to translate
         </div>
     </div>
 
@@ -437,6 +462,37 @@ const CENTRAL = 14 * 29 + 14; // index 420 = row 14, col 14
 let grid = GRID_DATA;
 
 // =============================================================================
+// SETTINGS PERSISTENCE
+// =============================================================================
+
+const SETTINGS = {
+    provider: 'sg_provider',
+    host: 'sg_host',
+    apiKey: 'sg_apiKey',
+    model: 'sg_model',
+    showThinking: 'sg_showThinking'
+};
+
+function saveSettings() {
+    localStorage.setItem(SETTINGS.provider, document.getElementById('providerSelect').value);
+    localStorage.setItem(SETTINGS.host, document.getElementById('hostInput').value);
+    localStorage.setItem(SETTINGS.apiKey, document.getElementById('apiKeyInput').value);
+    localStorage.setItem(SETTINGS.model, document.getElementById('modelSelect').value);
+    localStorage.setItem(SETTINGS.showThinking, document.getElementById('showThinking').checked);
+}
+
+function loadSettings() {
+    const provider = localStorage.getItem(SETTINGS.provider);
+    if (provider) document.getElementById('providerSelect').value = provider;
+    const host = localStorage.getItem(SETTINGS.host);
+    if (host) document.getElementById('hostInput').value = host;
+    const apiKey = localStorage.getItem(SETTINGS.apiKey);
+    if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
+    const showThinking = localStorage.getItem(SETTINGS.showThinking);
+    if (showThinking !== null) document.getElementById('showThinking').checked = showThinking === 'true';
+}
+
+// =============================================================================
 // RENDER
 // =============================================================================
 
@@ -448,6 +504,11 @@ const translateBtn = document.getElementById('translateBtn');
 const errorEl = document.getElementById('errorMsg');
 
 let selected = []; // array of indices into grid
+
+/* --- Drag selection state --- */
+let dragStartIdx = null;
+let dragActive = false;
+let previewed = []; // indices in current drag highlight
 
 function renderGrid() {
     container.innerHTML = '';
@@ -461,8 +522,79 @@ function renderGrid() {
         if (isSelected(i)) cell.classList.add('selected');
         cell.dataset.idx = i;
         cell.addEventListener('click', (e) => handleCellClick(e, i));
+        cell.addEventListener('touchstart', (e) => handleTouchStart(e, i), { passive: true });
+        cell.addEventListener('touchmove', (e) => handleTouchMove(e, i), { passive: false });
+        cell.addEventListener('touchend', (e) => handleTouchEnd(e, i), { passive: true });
         container.appendChild(cell);
     }
+}
+
+function handleTouchStart(e, idx) {
+    if (e.touches.length !== 1) return;
+    dragStartIdx = idx;
+    dragActive = false;
+}
+
+function handleTouchMove(e, idx) {
+    if (dragStartIdx === null) return;
+    if (e.touches.length !== 1) return;
+    if (idx !== dragStartIdx) e.preventDefault();
+    dragActive = true;
+    const range = getLinearRange(dragStartIdx, idx);
+    if (range) {
+        previewSelection(range);
+    } else {
+        previewSelection([dragStartIdx, idx]);
+    }
+}
+
+function handleTouchEnd(e, idx) {
+    if (dragStartIdx === null) return;
+    if (!dragActive) {
+        const pos = selected.indexOf(idx);
+        if (pos >= 0) {
+            selected.splice(pos, 1);
+        } else {
+            selected.push(idx);
+        }
+    } else {
+        const range = getLinearRange(dragStartIdx, idx);
+        if (range) {
+            for (const i of range) {
+                if (!selected.includes(i)) selected.push(i);
+            }
+        } else if (!selected.includes(idx)) {
+            selected.push(idx);
+        }
+    }
+    dragStartIdx = null;
+    dragActive = false;
+    clearPreview();
+    updateSelection();
+    renderGrid();
+}
+
+function previewSelection(indices) {
+    if (arraysEqual(previewed, indices)) return;
+    clearPreview();
+    previewed = indices;
+    for (const i of indices) {
+        const cell = container.querySelector(`[data-idx="${i}"]`);
+        if (cell) cell.classList.add('preview');
+    }
+}
+
+function clearPreview() {
+    for (const i of previewed) {
+        const cell = container.querySelector(`[data-idx="${i}"]`);
+        if (cell) cell.classList.remove('preview');
+    }
+    previewed = [];
+}
+
+function arraysEqual(a, b) {
+    if (a.length !== b.length) return false;
+    return a.every((v, i) => v === b[i]);
 }
 
 function isSelected(idx) {
@@ -609,10 +741,15 @@ function updateProviderUI() {
     document.getElementById('hostLabel').textContent = isOllama ? 'Ollama Host' : 'OpenRouter (fixed)';
     const hostInput = document.getElementById('hostInput');
     hostInput.readOnly = !isOllama;
-    hostInput.value = isOllama ? 'shadow.bonobo-dragon.ts.net:11434' : 'openrouter.ai (built-in)';
+    if (!isOllama) hostInput.value = 'openrouter.ai (built-in)';
     document.getElementById('keyLabel').style.display = isOllama ? 'none' : 'block';
     document.getElementById('apiKeyInput').style.display = isOllama ? 'none' : 'block';
     populateModels();
+    const savedModel = localStorage.getItem('sg_model');
+    if (savedModel) {
+        const opt = document.querySelector(`#modelSelect option[value="${savedModel}"]`);
+        if (opt) document.getElementById('modelSelect').value = savedModel;
+    }
 }
 
 function getProviderConfig() {
@@ -914,6 +1051,7 @@ setStatus('Ready');
 console.log('[init] Star Gauge reader loaded. Console errors above may be from prior loads — look for this message as the fresh-start marker.');
 
 // Initialize provider UI
+loadSettings();
 updateProviderUI();
 
 // Auto-detect on load
@@ -923,10 +1061,17 @@ setTimeout(() => {
 
 // Reasoning toggle listener — hides panel when disabled
 document.getElementById('showThinking').addEventListener('change', () => {
+    saveSettings();
     if (!document.getElementById('showThinking').checked) {
         document.getElementById('thinkingPanel').style.display = 'none';
     }
 });
+
+// Persist settings on change
+document.getElementById('providerSelect').addEventListener('change', saveSettings);
+document.getElementById('hostInput').addEventListener('change', saveSettings);
+document.getElementById('apiKeyInput').addEventListener('change', saveSettings);
+document.getElementById('modelSelect').addEventListener('change', saveSettings);
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
