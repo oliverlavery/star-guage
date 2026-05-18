@@ -23,7 +23,15 @@ The Star Gauge was written by Su Hui during the Former Qin dynasty as a letter t
 
 Then open http://127.0.0.1:8080
 
-Requires a local Ollama server (set `OLLAMA_HOST=0.0.0.0`) or an OpenRouter API key for translation features.
+### Ollama CORS
+
+The UI connects to Ollama from the browser, which requires **CORS to be enabled**. Start Ollama like this:
+
+```bash
+OLLAMA_ORIGINS='*' ollama serve
+```
+
+If you see "Cannot reach Ollama server" when clicking **Test**, CORS is the likely culprit. You can also switch the provider to **OpenRouter** and use an API key instead.
 
 ## Credits
 
