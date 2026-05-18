@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Star Gauge 璇璣圖 — Interactive Reader</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --muted: #8b949e;
+            --accent: #58a6ff;
+            --accent-dim: #1f6feb;
+            --select: rgba(88, 166, 255, 0.25);
+            --select-border: #58a6ff;
+            --red: #ff7b72;
+            --green: #7ee787;
+            --yellow: #e3b341;
+            --blue: #58a6ff;
+            --purple: #d2a8ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+        h1 span {
+            color: var(--muted);
+            font-weight: 400;
+            font-size: 0.9em;
+            margin-left: 0.5rem;
+        }
+        .controls {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .controls label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--muted);
+        }
+        input[type="text"], select, button {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-family: inherit;
+        }
+        input[type="text"] { min-width: 220px; }
+        select { min-width: 160px; cursor: pointer; }
+        button {
+            cursor: pointer;
+            transition: all 0.15s;
+            font-weight: 500;
+        }
+        button:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        button.primary {
+            background: var(--accent-dim);
+            border-color: var(--accent-dim);
+            color: #fff;
+        }
+        button.primary:hover:not(:disabled) {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        button.danger {
+            background: rgba(255, 123, 114, 0.15);
+            border-color: var(--red);
+            color: var(--red);
+        }
+        .main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        .grid-panel {
+            flex: 1;
+            overflow: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .grid-legend {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+            font-size: 0.75rem;
+            color: var(--muted);
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(29, 32px);
+            grid-template-rows: repeat(29, 32px);
+            gap: 2px;
+            user-select: none;
+            font-family: "Noto Serif SC", "STSong", "SimSun", serif;
+        }
+        .cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.1s;
+            position: relative;
+            background: var(--panel);
+            border: 1px solid transparent;
+        }
+        .cell:hover {
+            border-color: var(--accent);
+            z-index: 1;
+        }
+        .cell.selected {
+            background: var(--select);
+            border-color: var(--select-border);
+            color: #fff;
+            z-index: 2;
+        }
+        .cell.red { background: rgba(255, 123, 114, 0.22); }
+        .cell.red.selected {
+            background: rgba(255, 123, 114, 0.5);
+            border-color: var(--red);
+        }
+        .cell.green { background: rgba(126, 231, 135, 0.17); }
+        .cell.green.selected {
+            background: rgba(126, 231, 135, 0.45);
+            border-color: var(--green);
+        }
+        .cell.yellow { background: rgba(227, 179, 65, 0.17); }
+        .cell.yellow.selected {
+            background: rgba(227, 179, 65, 0.45);
+            border-color: var(--yellow);
+        }
+        .cell.blue { background: rgba(88, 166, 255, 0.17); }
+        .cell.blue.selected {
+            background: rgba(88, 166, 255, 0.45);
+            border-color: var(--blue);
+        }
+        .cell.purple { background: rgba(210, 168, 255, 0.08); }
+        .cell.purple.selected {
+            background: rgba(210, 168, 255, 0.35);
+            border-color: var(--purple);
+        }
+        .cell.central {
+            color: var(--green);
+            font-weight: bold;
+        }
+        .cell.central::after {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border: 1px solid var(--green);
+            border-radius: 4px;
+            pointer-events: none;
+        }
+        .sidebar {
+            width: 420px;
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            background: var(--panel);
+        }
+        .sequence-panel {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .sequence-panel h2 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .sequence-display {
+            font-family: "Noto Serif SC", "STSong", "SimSun", serif;
+            font-size: 1.5rem;
+            letter-spacing: 0.15em;
+            min-height: 3rem;
+            padding: 0.75rem;
+            background: var(--bg);
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            word-break: break-all;
+            line-height: 1.6;
+        }
+        .sequence-display:empty::before {
+            content: 'Click characters to build a sequence. Option+click to select a line (horizontal, vertical, or diagonal).';
+            color: var(--muted);
+            font-size: 0.75rem;
+            font-family: inherit;
+            letter-spacing: normal;
+        }
+        .action-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        .translation-panel {
+            flex: 1;
+            overflow: auto;
+            padding: 1.25rem;
+        }
+        .translation-panel h2 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .result-box {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            min-height: 120px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            font-size: 0.875rem;
+        }
+        .result-box:empty::before {
+            content: 'Translation will appear here…';
+            color: var(--muted);
+        }
+        .thinking-panel {
+            margin-top: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .thinking-header {
+            background: var(--panel);
+            padding: 0.4rem 0.75rem;
+            font-size: 0.8rem;
+            color: var(--muted);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .thinking-header:hover {
+            color: var(--text);
+        }
+        .thinking-header .count {
+            font-size: 0.7rem;
+            color: var(--muted);
+        }
+        .thinking-content {
+            background: var(--bg);
+            padding: 0.75rem;
+            font-size: 0.8rem;
+            color: var(--muted);
+            line-height: 1.5;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow: auto;
+            display: none;
+        }
+        .thinking-content.open {
+            display: block;
+        }
+        .result-box.loading::before {
+            content: 'Consulting the poem…';
+            color: var(--accent);
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .error-msg {
+            color: var(--red);
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+        .status-bar {
+            padding: 0.5rem 1.25rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.75rem;
+            color: var(--muted);
+            display: flex;
+            justify-content: space-between;
+        }
+        .status-bar .ok { color: var(--green); }
+        .status-bar .err { color: var(--red); }
+
+        kbd {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 0.05rem 0.3rem;
+            font-family: inherit;
+            font-size: 0.7rem;
+        }
+        @media (max-width: 900px) {
+            .main { flex-direction: column; }
+            .sidebar { width: auto; border-left: none; border-top: 1px solid var(--border); max-height: 50vh; }
+            .grid-container { grid-template-columns: repeat(29, 28px); grid-template-rows: repeat(29, 28px); gap: 1px; }
+            .cell { font-size: 0.85rem; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Star Gauge <span>璇璣圖 · Interactive Reader</span></h1>
+    <div class="controls">
+        <label>Provider</label>
+        <select id="providerSelect" onchange="updateProviderUI()">
+            <option value="ollama">Ollama (local)</option>
+            <option value="openrouter">OpenRouter (public)</option>
+        </select>
+        <label id="hostLabel">Ollama Host</label>
+        <input type="text" id="hostInput" value="127.0.0.1:11434" placeholder="host:port">
+        <label id="keyLabel" style="display:none">OpenRouter Key</label>
+        <input type="password" id="apiKeyInput" placeholder="sk-or-v1-…" style="display:none;min-width:180px;">
+        <label id="modelLabel">Model</label>
+        <select id="modelSelect"></select>
+        <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;" title="When unchecked, model will not show its reasoning chain">
+            <input type="checkbox" id="showThinking" style="cursor:pointer;">
+            Reasoning
+        </label>
+        <button onclick="checkConnection()">Test</button>
+    </div>
+</header>
+
+<div class="main">
+    <div class="grid-panel">
+        <div class="grid-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Red (maroon)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Purple (indigo)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Green (teal, inner loop + 心)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Yellow (olive)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Blue (navy)</div>
+        </div>
+        <div class="grid-container" id="grid"></div>
+        <div class="grid-help" style="margin-top:0.75rem;font-size:0.75rem;color:var(--muted);line-height:1.5;text-align:center;max-width:600px;">
+            <strong>Click</strong> characters to select · <strong>Option+click</strong> (Mac) or <strong>Alt+click</strong> (Windows/Linux) to select a straight line (horizontal, vertical, or diagonal) from your last selected character · <strong>Shift+click</strong> also works for line selection · <kbd>Esc</kbd> to clear · <kbd>Ctrl+Enter</kbd> to translate
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="sequence-panel">
+            <h2>Selected Sequence <span id="charCount" style="color:var(--muted);font-weight:400">0 chars</span></h2>
+            <div class="sequence-display" id="sequence"></div>
+            <div class="action-bar">
+                <button class="primary" id="translateBtn" onclick="translateSequence()" disabled>Translate</button>
+                <button onclick="clearSelection()">Clear</button>
+                <button class="danger" onclick="undoLast()">Undo</button>
+            </div>
+            <div class="error-msg" id="errorMsg"></div>
+        </div>
+
+        <div class="translation-panel">
+            <h2>Translation</h2>
+            <div class="result-box" id="result"></div>
+            <div class="thinking-panel" id="thinkingPanel" style="display:none">
+                <div class="thinking-header" id="thinkingHeader" onclick="toggleThinking()">
+                    <span><span id="thinkingArrow">▶</span> 🧠 Model reasoning</span>
+                    <span class="count" id="thinkingCount">0 thinking tokens</span>
+                </div>
+                <div class="thinking-content" id="thinkingContent"></div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <span id="connStatus">Ready</span>
+            <span id="modelStatus">Select a provider and model above</span>
+        </div>
+    </div>
+</div>
+
+<script>
+// =============================================================================
+// STAR GAUAGE GRID DATA
+// 29×29 = 841 characters from the historical Xuanji Tu (璇璣圖) by Lady Su Hui.
+// Color coding based on the interactive reader at flexcode.org/Star_Gauge/:
+//   red    = rgb(128, 0, 0)   → maroon
+//   blue   = rgb(0, 0, 128)   → navy
+//   yellow = rgb(128, 128, 0) → olive
+//   green  = rgb(0, 128, 128) → teal
+//   null   = rgb(0, 0, 0)     → black (default)
+// =============================================================================
+
+const GRID_DATA = [{"ch": "琴", "color": "red"}, {"ch": "清", "color": "red"}, {"ch": "流", "color": "red"}, {"ch": "楚", "color": "red"}, {"ch": "激", "color": "red"}, {"ch": "弦", "color": "red"}, {"ch": "商", "color": "red"}, {"ch": "秦", "color": "red"}, {"ch": "曲", "color": "red"}, {"ch": "發", "color": "red"}, {"ch": "聲", "color": "red"}, {"ch": "悲", "color": "red"}, {"ch": "摧", "color": "red"}, {"ch": "藏", "color": "red"}, {"ch": "音", "color": "red"}, {"ch": "和", "color": "red"}, {"ch": "詠", "color": "red"}, {"ch": "思", "color": "red"}, {"ch": "惟", "color": "red"}, {"ch": "空", "color": "red"}, {"ch": "堂", "color": "red"}, {"ch": "心", "color": "red"}, {"ch": "憂", "color": "red"}, {"ch": "增", "color": "red"}, {"ch": "慕", "color": "red"}, {"ch": "懷", "color": "red"}, {"ch": "慘", "color": "red"}, {"ch": "傷", "color": "red"}, {"ch": "仁", "color": "red"}, {"ch": "芳", "color": "red"}, {"ch": "廊", "color": null}, {"ch": "東", "color": null}, {"ch": "步", "color": null}, {"ch": "階", "color": null}, {"ch": "西", "color": null}, {"ch": "遊", "color": null}, {"ch": "王", "color": "red"}, {"ch": "姿", "color": "blue"}, {"ch": "淑", "color": "blue"}, {"ch": "窈", "color": "blue"}, {"ch": "窕", "color": "blue"}, {"ch": "伯", "color": "blue"}, {"ch": "邵", "color": "blue"}, {"ch": "南", "color": "blue"}, {"ch": "周", "color": "blue"}, {"ch": "風", "color": "blue"}, {"ch": "興", "color": "blue"}, {"ch": "自", "color": "blue"}, {"ch": "后", "color": "blue"}, {"ch": "妃", "color": "blue"}, {"ch": "荒", "color": "red"}, {"ch": "經", "color": null}, {"ch": "離", "color": null}, {"ch": "所", "color": null}, {"ch": "懷", "color": null}, {"ch": "歎", "color": null}, {"ch": "嗟", "color": null}, {"ch": "智", "color": "red"}, {"ch": "蘭", "color": "red"}, {"ch": "休", "color": null}, {"ch": "桃", "color": null}, {"ch": "林", "color": null}, {"ch": "陰", "color": null}, {"ch": "翳", "color": null}, {"ch": "桑", "color": null}, {"ch": "懷", "color": "red"}, {"ch": "歸", "color": "blue"}, {"ch": "思", "color": "blue"}, {"ch": "廣", "color": "blue"}, {"ch": "河", "color": "blue"}, {"ch": "女", "color": "blue"}, {"ch": "衛", "color": "blue"}, {"ch": "鄭", "color": "blue"}, {"ch": "楚", "color": "blue"}, {"ch": "樊", "color": "blue"}, {"ch": "厲", "color": "blue"}, {"ch": "節", "color": "blue"}, {"ch": "中", "color": "blue"}, {"ch": "闈", "color": "blue"}, {"ch": "淫", "color": "red"}, {"ch": "遐", "color": null}, {"ch": "曠", "color": null}, {"ch": "路", "color": null}, {"ch": "傷", "color": null}, {"ch": "中", "color": null}, {"ch": "情", "color": null}, {"ch": "懷", "color": "red"}, {"ch": "凋", "color": "red"}, {"ch": "翔", "color": null}, {"ch": "飛", "color": null}, {"ch": "燕", "color": null}, {"ch": "巢", "color": null}, {"ch": "雙", "color": null}, {"ch": "鳩", "color": null}, {"ch": "土", "color": "red"}, {"ch": "迤", "color": "blue"}, {"ch": "逶", "color": "blue"}, {"ch": "路", "color": "blue"}, {"ch": "遐", "color": "blue"}, {"ch": "志", "color": "blue"}, {"ch": "詠", "color": "blue"}, {"ch": "歌", "color": "blue"}, {"ch": "長", "color": "blue"}, {"ch": "嘆", "color": "blue"}, {"ch": "不", "color": "blue"}, {"ch": "能", "color": "blue"}, {"ch": "奮", "color": "blue"}, {"ch": "飛", "color": "blue"}, {"ch": "妄", "color": "red"}, {"ch": "清", "color": null}, {"ch": "幃", "color": null}, {"ch": "房", "color": null}, {"ch": "君", "color": null}, {"ch": "無", "color": null}, {"ch": "家", "color": null}, {"ch": "德", "color": "red"}, {"ch": "茂", "color": "red"}, {"ch": "流", "color": null}, {"ch": "泉", "color": null}, {"ch": "清", "color": null}, {"ch": "水", "color": null}, {"ch": "激", "color": null}, {"ch": "揚", "color": null}, {"ch": "眷", "color": "red"}, {"ch": "頎", "color": "blue"}, {"ch": "其", "color": "blue"}, {"ch": "人", "color": "blue"}, {"ch": "碩", "color": "blue"}, {"ch": "興", "color": "blue"}, {"ch": "齊", "color": "blue"}, {"ch": "商", "color": "blue"}, {"ch": "雙", "color": "blue"}, {"ch": "發", "color": "blue"}, {"ch": "歌", "color": "blue"}, {"ch": "我", "color": "blue"}, {"ch": "袞", "color": "blue"}, {"ch": "衣", "color": "blue"}, {"ch": "想", "color": "red"}, {"ch": "華", "color": null}, {"ch": "飾", "color": null}, {"ch": "容", "color": null}, {"ch": "朗", "color": null}, {"ch": "鏡", "color": null}, {"ch": "明", "color": null}, {"ch": "聖", "color": "red"}, {"ch": "熙", "color": "red"}, {"ch": "長", "color": null}, {"ch": "君", "color": null}, {"ch": "思", "color": null}, {"ch": "悲", "color": null}, {"ch": "好", "color": null}, {"ch": "仇", "color": null}, {"ch": "舊", "color": "red"}, {"ch": "蕤", "color": "blue"}, {"ch": "葳", "color": "blue"}, {"ch": "桀", "color": "blue"}, {"ch": "翠", "color": "blue"}, {"ch": "榮", "color": "blue"}, {"ch": "曜", "color": "blue"}, {"ch": "流", "color": "blue"}, {"ch": "華", "color": "blue"}, {"ch": "觀", "color": "blue"}, {"ch": "冶", "color": "blue"}, {"ch": "容", "color": "blue"}, {"ch": "為", "color": "blue"}, {"ch": "誰", "color": "blue"}, {"ch": "感", "color": "red"}, {"ch": "英", "color": null}, {"ch": "曜", "color": null}, {"ch": "珠", "color": null}, {"ch": "光", "color": null}, {"ch": "紛", "color": null}, {"ch": "葩", "color": null}, {"ch": "虞", "color": "red"}, {"ch": "陽", "color": "red"}, {"ch": "愁", "color": null}, {"ch": "嘆", "color": null}, {"ch": "發", "color": null}, {"ch": "容", "color": null}, {"ch": "摧", "color": null}, {"ch": "傷", "color": null}, {"ch": "鄉", "color": "red"}, {"ch": "悲", "color": "blue"}, {"ch": "情", "color": "blue"}, {"ch": "我", "color": "blue"}, {"ch": "感", "color": "blue"}, {"ch": "傷", "color": "blue"}, {"ch": "情", "color": "blue"}, {"ch": "徵", "color": "blue"}, {"ch": "宮", "color": "blue"}, {"ch": "羽", "color": "blue"}, {"ch": "同", "color": "blue"}, {"ch": "聲", "color": "blue"}, {"ch": "相", "color": "blue"}, {"ch": "追", "color": "blue"}, {"ch": "所", "color": "red"}, {"ch": "多", "color": null}, {"ch": "思", "color": null}, {"ch": "感", "color": null}, {"ch": "誰", "color": null}, {"ch": "為", "color": null}, {"ch": "榮", "color": null}, {"ch": "唐", "color": "red"}, {"ch": "春", "color": "red"}, {"ch": "方", "color": "red"}, {"ch": "殊", "color": "red"}, {"ch": "離", "color": "red"}, {"ch": "仁", "color": "red"}, {"ch": "君", "color": "red"}, {"ch": "榮", "color": "red"}, {"ch": "身", "color": "red"}, {"ch": "苦", "color": "red"}, {"ch": "惟", "color": "red"}, {"ch": "艱", "color": "red"}, {"ch": "生", "color": "red"}, {"ch": "患", "color": "red"}, {"ch": "多", "color": "red"}, {"ch": "殷", "color": "red"}, {"ch": "憂", "color": "red"}, {"ch": "纏", "color": "red"}, {"ch": "情", "color": "red"}, {"ch": "將", "color": "red"}, {"ch": "如", "color": "red"}, {"ch": "何", "color": "red"}, {"ch": "欽", "color": "red"}, {"ch": "蒼", "color": "red"}, {"ch": "穹", "color": "red"}, {"ch": "誓", "color": "red"}, {"ch": "終", "color": "red"}, {"ch": "篤", "color": "red"}, {"ch": "志", "color": "red"}, {"ch": "貞", "color": "red"}, {"ch": "牆", "color": "red"}, {"ch": "禽", "color": "blue"}, {"ch": "心", "color": "blue"}, {"ch": "濱", "color": "blue"}, {"ch": "均", "color": "blue"}, {"ch": "深", "color": "blue"}, {"ch": "身", "color": "blue"}, {"ch": "加", "color": "red"}, {"ch": "懷", "color": "yellow"}, {"ch": "憂", "color": "yellow"}, {"ch": "是", "color": "yellow"}, {"ch": "嬰", "color": "yellow"}, {"ch": "藻", "color": "purple"}, {"ch": "文", "color": "purple"}, {"ch": "繁", "color": "purple"}, {"ch": "虎", "color": "purple"}, {"ch": "龍", "color": "purple"}, {"ch": "寧", "color": "yellow"}, {"ch": "自", "color": "yellow"}, {"ch": "感", "color": "yellow"}, {"ch": "思", "color": "yellow"}, {"ch": "岑", "color": "red"}, {"ch": "形", "color": "blue"}, {"ch": "熒", "color": "blue"}, {"ch": "城", "color": "blue"}, {"ch": "榮", "color": "blue"}, {"ch": "明", "color": "blue"}, {"ch": "庭", "color": "blue"}, {"ch": "妙", "color": "red"}, {"ch": "面", "color": "red"}, {"ch": "伯", "color": "blue"}, {"ch": "改", "color": "blue"}, {"ch": "漢", "color": "blue"}, {"ch": "物", "color": "blue"}, {"ch": "日", "color": "blue"}, {"ch": "我", "color": "blue"}, {"ch": "兼", "color": "red"}, {"ch": "思", "color": "yellow"}, {"ch": "何", "color": "yellow"}, {"ch": "漫", "color": "yellow"}, {"ch": "漫", "color": "yellow"}, {"ch": "榮", "color": "purple"}, {"ch": "曜", "color": "purple"}, {"ch": "華", "color": "purple"}, {"ch": "雕", "color": "purple"}, {"ch": "旌", "color": "purple"}, {"ch": "孜", "color": "yellow"}, {"ch": "孜", "color": "yellow"}, {"ch": "傷", "color": "yellow"}, {"ch": "情", "color": "yellow"}, {"ch": "幽", "color": "red"}, {"ch": "未", "color": "blue"}, {"ch": "猶", "color": "blue"}, {"ch": "傾", "color": "blue"}, {"ch": "苟", "color": "blue"}, {"ch": "難", "color": "blue"}, {"ch": "闈", "color": "blue"}, {"ch": "顯", "color": "red"}, {"ch": "殊", "color": "red"}, {"ch": "在", "color": "blue"}, {"ch": "者", "color": "blue"}, {"ch": "之", "color": "blue"}, {"ch": "品", "color": "blue"}, {"ch": "潤", "color": "blue"}, {"ch": "乎", "color": "blue"}, {"ch": "愁", "color": "red"}, {"ch": "苦", "color": "yellow"}, {"ch": "艱", "color": "yellow"}, {"ch": "是", "color": "yellow"}, {"ch": "丁", "color": "yellow"}, {"ch": "麗", "color": "purple"}, {"ch": "壯", "color": "purple"}, {"ch": "觀", "color": "purple"}, {"ch": "飾", "color": "purple"}, {"ch": "容", "color": "purple"}, {"ch": "側", "color": "yellow"}, {"ch": "君", "color": "yellow"}, {"ch": "在", "color": "yellow"}, {"ch": "時", "color": "yellow"}, {"ch": "岩", "color": "red"}, {"ch": "在", "color": "blue"}, {"ch": "炎", "color": "blue"}, {"ch": "在", "color": "blue"}, {"ch": "不", "color": "blue"}, {"ch": "受", "color": "blue"}, {"ch": "亂", "color": "blue"}, {"ch": "華", "color": "red"}, {"ch": "意", "color": "red"}, {"ch": "誠", "color": "blue"}, {"ch": "惑", "color": "blue"}, {"ch": "步", "color": "blue"}, {"ch": "育", "color": "blue"}, {"ch": "浸", "color": "blue"}, {"ch": "集", "color": "blue"}, {"ch": "悴", "color": "red"}, {"ch": "我", "color": "yellow"}, {"ch": "生", "color": "yellow"}, {"ch": "何", "color": "yellow"}, {"ch": "冤", "color": "yellow"}, {"ch": "充", "color": "purple"}, {"ch": "顏", "color": "purple"}, {"ch": "曜", "color": "purple"}, {"ch": "繡", "color": "purple"}, {"ch": "衣", "color": "purple"}, {"ch": "夢", "color": "yellow"}, {"ch": "想", "color": "yellow"}, {"ch": "勞", "color": "yellow"}, {"ch": "形", "color": "yellow"}, {"ch": "峻", "color": "red"}, {"ch": "慎", "color": "blue"}, {"ch": "盛", "color": "blue"}, {"ch": "戒", "color": "blue"}, {"ch": "義", "color": "blue"}, {"ch": "消", "color": "blue"}, {"ch": "作", "color": "blue"}, {"ch": "重", "color": "red"}, {"ch": "感", "color": "red"}, {"ch": "故", "color": "blue"}, {"ch": "暱", "color": "blue"}, {"ch": "飄", "color": "blue"}, {"ch": "施", "color": "blue"}, {"ch": "愆", "color": "blue"}, {"ch": "殃", "color": "blue"}, {"ch": "少", "color": "red"}, {"ch": "章", "color": "purple"}, {"ch": "時", "color": "purple"}, {"ch": "桑", "color": "purple"}, {"ch": "詩", "color": "purple"}, {"ch": "端", "color": "yellow"}, {"ch": "無", "color": "yellow"}, {"ch": "終", "color": "yellow"}, {"ch": "始", "color": "yellow"}, {"ch": "詩", "color": "yellow"}, {"ch": "仁", "color": "purple"}, {"ch": "顏", "color": "purple"}, {"ch": "貞", "color": "purple"}, {"ch": "寒", "color": "purple"}, {"ch": "嵯", "color": "red"}, {"ch": "深", "color": "blue"}, {"ch": "興", "color": "blue"}, {"ch": "後", "color": "blue"}, {"ch": "姬", "color": "blue"}, {"ch": "源", "color": "blue"}, {"ch": "人", "color": "blue"}, {"ch": "榮", "color": "red"}, {"ch": "故", "color": "red"}, {"ch": "遺", "color": "blue"}, {"ch": "親", "color": "blue"}, {"ch": "飄", "color": "blue"}, {"ch": "生", "color": "blue"}, {"ch": "思", "color": "blue"}, {"ch": "愆", "color": "blue"}, {"ch": "精", "color": "red"}, {"ch": "徽", "color": "purple"}, {"ch": "盛", "color": "purple"}, {"ch": "醫", "color": "purple"}, {"ch": "風", "color": "purple"}, {"ch": "比", "color": "yellow"}, {"ch": "平", "color": "green"}, {"ch": "始", "color": "green"}, {"ch": "璇", "color": "green"}, {"ch": "情", "color": "yellow"}, {"ch": "賢", "color": "purple"}, {"ch": "喪", "color": "purple"}, {"ch": "物", "color": "purple"}, {"ch": "歲", "color": "purple"}, {"ch": "峨", "color": "red"}, {"ch": "慮", "color": "blue"}, {"ch": "漸", "color": "blue"}, {"ch": "孽", "color": "blue"}, {"ch": "班", "color": "blue"}, {"ch": "禍", "color": "blue"}, {"ch": "讒", "color": "blue"}, {"ch": "章", "color": "red"}, {"ch": "新", "color": "red"}, {"ch": "舊", "color": "blue"}, {"ch": "聞", "color": "blue"}, {"ch": "離", "color": "blue"}, {"ch": "天", "color": "blue"}, {"ch": "罪", "color": "blue"}, {"ch": "辜", "color": "blue"}, {"ch": "神", "color": "red"}, {"ch": "恨", "color": "purple"}, {"ch": "昭", "color": "purple"}, {"ch": "盛", "color": "purple"}, {"ch": "興", "color": "purple"}, {"ch": "作", "color": "yellow"}, {"ch": "蘇", "color": "green"}, {"ch": "心", "color": "green"}, {"ch": "璣", "color": "green"}, {"ch": "明", "color": "yellow"}, {"ch": "別", "color": "purple"}, {"ch": "改", "color": "purple"}, {"ch": "知", "color": "purple"}, {"ch": "識", "color": "purple"}, {"ch": "深", "color": "red"}, {"ch": "微", "color": "blue"}, {"ch": "至", "color": "blue"}, {"ch": "嬖", "color": "blue"}, {"ch": "女", "color": "blue"}, {"ch": "因", "color": "blue"}, {"ch": "奸", "color": "blue"}, {"ch": "臣", "color": "red"}, {"ch": "霜", "color": "red"}, {"ch": "廢", "color": "blue"}, {"ch": "遠", "color": "blue"}, {"ch": "微", "color": "blue"}, {"ch": "地", "color": "blue"}, {"ch": "積", "color": "blue"}, {"ch": "何", "color": "blue"}, {"ch": "遐", "color": "red"}, {"ch": "微", "color": "purple"}, {"ch": "業", "color": "purple"}, {"ch": "孟", "color": "purple"}, {"ch": "鹿", "color": "purple"}, {"ch": "麗", "color": "yellow"}, {"ch": "氏", "color": "green"}, {"ch": "詩", "color": "green"}, {"ch": "圖", "color": "green"}, {"ch": "顯", "color": "yellow"}, {"ch": "行", "color": "purple"}, {"ch": "華", "color": "purple"}, {"ch": "終", "color": "purple"}, {"ch": "凋", "color": "purple"}, {"ch": "淵", "color": "red"}, {"ch": "察", "color": "blue"}, {"ch": "大", "color": "blue"}, {"ch": "趙", "color": "blue"}, {"ch": "婕", "color": "blue"}, {"ch": "所", "color": "blue"}, {"ch": "佞", "color": "blue"}, {"ch": "賢", "color": "red"}, {"ch": "水", "color": "red"}, {"ch": "故", "color": "blue"}, {"ch": "離", "color": "blue"}, {"ch": "隔", "color": "blue"}, {"ch": "德", "color": "blue"}, {"ch": "怨", "color": "blue"}, {"ch": "因", "color": "blue"}, {"ch": "幽", "color": "red"}, {"ch": "元", "color": "purple"}, {"ch": "傾", "color": "purple"}, {"ch": "宣", "color": "purple"}, {"ch": "鳴", "color": "purple"}, {"ch": "辭", "color": "yellow"}, {"ch": "理", "color": "yellow"}, {"ch": "興", "color": "yellow"}, {"ch": "義", "color": "yellow"}, {"ch": "怨", "color": "yellow"}, {"ch": "士", "color": "purple"}, {"ch": "容", "color": "purple"}, {"ch": "始", "color": "purple"}, {"ch": "松", "color": "purple"}, {"ch": "重", "color": "red"}, {"ch": "遠", "color": "blue"}, {"ch": "伐", "color": "blue"}, {"ch": "氏", "color": "blue"}, {"ch": "好", "color": "blue"}, {"ch": "恃", "color": "blue"}, {"ch": "兇", "color": "blue"}, {"ch": "惟", "color": "red"}, {"ch": "齊", "color": "red"}, {"ch": "君", "color": "blue"}, {"ch": "殊", "color": "blue"}, {"ch": "喬", "color": "blue"}, {"ch": "貴", "color": "blue"}, {"ch": "其", "color": "blue"}, {"ch": "備", "color": "blue"}, {"ch": "曠", "color": "red"}, {"ch": "悼", "color": "yellow"}, {"ch": "思", "color": "yellow"}, {"ch": "傷", "color": "yellow"}, {"ch": "懷", "color": "yellow"}, {"ch": "日", "color": "purple"}, {"ch": "往", "color": "purple"}, {"ch": "感", "color": "purple"}, {"ch": "年", "color": "purple"}, {"ch": "衰", "color": "purple"}, {"ch": "念", "color": "yellow"}, {"ch": "是", "color": "yellow"}, {"ch": "舊", "color": "yellow"}, {"ch": "愆", "color": "yellow"}, {"ch": "涯", "color": "red"}, {"ch": "禍", "color": "blue"}, {"ch": "用", "color": "blue"}, {"ch": "飛", "color": "blue"}, {"ch": "辭", "color": "blue"}, {"ch": "恣", "color": "blue"}, {"ch": "害", "color": "blue"}, {"ch": "聖", "color": "red"}, {"ch": "傑", "color": "red"}, {"ch": "子", "color": "blue"}, {"ch": "我", "color": "blue"}, {"ch": "木", "color": "blue"}, {"ch": "平", "color": "blue"}, {"ch": "根", "color": "blue"}, {"ch": "當", "color": "blue"}, {"ch": "遠", "color": "red"}, {"ch": "嘆", "color": "yellow"}, {"ch": "水", "color": "yellow"}, {"ch": "感", "color": "yellow"}, {"ch": "悲", "color": "yellow"}, {"ch": "思", "color": "purple"}, {"ch": "憂", "color": "purple"}, {"ch": "遠", "color": "purple"}, {"ch": "勞", "color": "purple"}, {"ch": "情", "color": "purple"}, {"ch": "誰", "color": "yellow"}, {"ch": "為", "color": "yellow"}, {"ch": "獨", "color": "yellow"}, {"ch": "居", "color": "yellow"}, {"ch": "經", "color": "red"}, {"ch": "在", "color": "blue"}, {"ch": "昭", "color": "blue"}, {"ch": "燕", "color": "blue"}, {"ch": "輦", "color": "blue"}, {"ch": "極", "color": "blue"}, {"ch": "我", "color": "blue"}, {"ch": "配", "color": "red"}, {"ch": "志", "color": "red"}, {"ch": "惟", "color": "blue"}, {"ch": "同", "color": "blue"}, {"ch": "誰", "color": "blue"}, {"ch": "均", "color": "blue"}, {"ch": "難", "color": "blue"}, {"ch": "苦", "color": "blue"}, {"ch": "離", "color": "red"}, {"ch": "戚", "color": "yellow"}, {"ch": "戚", "color": "yellow"}, {"ch": "情", "color": "yellow"}, {"ch": "哀", "color": "yellow"}, {"ch": "慕", "color": "purple"}, {"ch": "歲", "color": "purple"}, {"ch": "殊", "color": "purple"}, {"ch": "嘆", "color": "purple"}, {"ch": "時", "color": "purple"}, {"ch": "賤", "color": "yellow"}, {"ch": "女", "color": "yellow"}, {"ch": "懷", "color": "yellow"}, {"ch": "歡", "color": "yellow"}, {"ch": "網", "color": "red"}, {"ch": "防", "color": "blue"}, {"ch": "青", "color": "blue"}, {"ch": "實", "color": "blue"}, {"ch": "漢", "color": "blue"}, {"ch": "驕", "color": "blue"}, {"ch": "忠", "color": "blue"}, {"ch": "英", "color": "red"}, {"ch": "清", "color": "red"}, {"ch": "新", "color": "blue"}, {"ch": "衾", "color": "blue"}, {"ch": "陰", "color": "blue"}, {"ch": "勻", "color": "blue"}, {"ch": "尋", "color": "blue"}, {"ch": "辛", "color": "blue"}, {"ch": "鳳", "color": "red"}, {"ch": "知", "color": "yellow"}, {"ch": "我", "color": "yellow"}, {"ch": "者", "color": "yellow"}, {"ch": "誰", "color": "yellow"}, {"ch": "世", "color": "purple"}, {"ch": "異", "color": "purple"}, {"ch": "浮", "color": "purple"}, {"ch": "寄", "color": "purple"}, {"ch": "傾", "color": "purple"}, {"ch": "鄙", "color": "yellow"}, {"ch": "賤", "color": "yellow"}, {"ch": "何", "color": "yellow"}, {"ch": "如", "color": "yellow"}, {"ch": "羅", "color": "red"}, {"ch": "萌", "color": "blue"}, {"ch": "青", "color": "blue"}, {"ch": "生", "color": "blue"}, {"ch": "成", "color": "blue"}, {"ch": "盈", "color": "blue"}, {"ch": "貞", "color": "blue"}, {"ch": "皇", "color": "red"}, {"ch": "純", "color": "red"}, {"ch": "貞", "color": "red"}, {"ch": "志", "color": "red"}, {"ch": "一", "color": "red"}, {"ch": "專", "color": "red"}, {"ch": "所", "color": "red"}, {"ch": "當", "color": "red"}, {"ch": "麟", "color": "red"}, {"ch": "沙", "color": "red"}, {"ch": "流", "color": "red"}, {"ch": "頹", "color": "red"}, {"ch": "逝", "color": "red"}, {"ch": "異", "color": "red"}, {"ch": "浮", "color": "red"}, {"ch": "沉", "color": "red"}, {"ch": "華", "color": "red"}, {"ch": "英", "color": "red"}, {"ch": "翳", "color": "red"}, {"ch": "曜", "color": "red"}, {"ch": "潛", "color": "red"}, {"ch": "陽", "color": "red"}, {"ch": "林", "color": "red"}, {"ch": "西", "color": "red"}, {"ch": "昭", "color": "red"}, {"ch": "景", "color": "red"}, {"ch": "薄", "color": "red"}, {"ch": "榆", "color": "red"}, {"ch": "桑", "color": "red"}, {"ch": "倫", "color": "red"}, {"ch": "望", "color": "red"}, {"ch": "微", "color": null}, {"ch": "精", "color": null}, {"ch": "感", "color": null}, {"ch": "通", "color": null}, {"ch": "明", "color": null}, {"ch": "神", "color": null}, {"ch": "龍", "color": "red"}, {"ch": "馳", "color": "blue"}, {"ch": "若", "color": "blue"}, {"ch": "然", "color": "blue"}, {"ch": "倏", "color": "blue"}, {"ch": "逝", "color": "blue"}, {"ch": "惟", "color": "blue"}, {"ch": "時", "color": "blue"}, {"ch": "年", "color": "blue"}, {"ch": "殊", "color": "blue"}, {"ch": "白", "color": "blue"}, {"ch": "日", "color": "blue"}, {"ch": "西", "color": "blue"}, {"ch": "移", "color": "blue"}, {"ch": "光", "color": "red"}, {"ch": "滋", "color": null}, {"ch": "愚", "color": null}, {"ch": "讒", "color": null}, {"ch": "漫", "color": null}, {"ch": "頑", "color": null}, {"ch": "凶", "color": null}, {"ch": "匹", "color": "red"}, {"ch": "誰", "color": "red"}, {"ch": "雲", "color": null}, {"ch": "浮", "color": null}, {"ch": "寄", "color": null}, {"ch": "身", "color": null}, {"ch": "輕", "color": null}, {"ch": "飛", "color": null}, {"ch": "昭", "color": "red"}, {"ch": "虧", "color": "blue"}, {"ch": "不", "color": "blue"}, {"ch": "盈", "color": "blue"}, {"ch": "無", "color": "blue"}, {"ch": "倏", "color": "blue"}, {"ch": "必", "color": "blue"}, {"ch": "盛", "color": "blue"}, {"ch": "有", "color": "blue"}, {"ch": "衰", "color": "blue"}, {"ch": "無", "color": "blue"}, {"ch": "日", "color": "blue"}, {"ch": "不", "color": "blue"}, {"ch": "陂", "color": "blue"}, {"ch": "流", "color": "red"}, {"ch": "蒙", "color": null}, {"ch": "謙", "color": null}, {"ch": "退", "color": null}, {"ch": "休", "color": null}, {"ch": "孝", "color": null}, {"ch": "慈", "color": null}, {"ch": "離", "color": "red"}, {"ch": "思", "color": "red"}, {"ch": "輝", "color": null}, {"ch": "光", "color": null}, {"ch": "飭", "color": null}, {"ch": "桀", "color": null}, {"ch": "殊", "color": null}, {"ch": "文", "color": null}, {"ch": "德", "color": "red"}, {"ch": "離", "color": "blue"}, {"ch": "忠", "color": "blue"}, {"ch": "體", "color": "blue"}, {"ch": "一", "color": "blue"}, {"ch": "達", "color": "blue"}, {"ch": "心", "color": "blue"}, {"ch": "意", "color": "blue"}, {"ch": "志", "color": "blue"}, {"ch": "殊", "color": "blue"}, {"ch": "憤", "color": "blue"}, {"ch": "激", "color": "blue"}, {"ch": "何", "color": "blue"}, {"ch": "施", "color": "blue"}, {"ch": "電", "color": "red"}, {"ch": "疑", "color": null}, {"ch": "危", "color": null}, {"ch": "遠", "color": null}, {"ch": "家", "color": null}, {"ch": "和", "color": null}, {"ch": "雍", "color": null}, {"ch": "飄", "color": "red"}, {"ch": "想", "color": "red"}, {"ch": "群", "color": null}, {"ch": "離", "color": null}, {"ch": "散", "color": null}, {"ch": "妾", "color": null}, {"ch": "孤", "color": null}, {"ch": "遺", "color": null}, {"ch": "懷", "color": "red"}, {"ch": "儀", "color": "blue"}, {"ch": "容", "color": "blue"}, {"ch": "仰", "color": "blue"}, {"ch": "俯", "color": "blue"}, {"ch": "榮", "color": "blue"}, {"ch": "華", "color": "blue"}, {"ch": "麗", "color": "blue"}, {"ch": "飾", "color": "blue"}, {"ch": "身", "color": "blue"}, {"ch": "將", "color": "blue"}, {"ch": "無", "color": "blue"}, {"ch": "誰", "color": "blue"}, {"ch": "為", "color": "blue"}, {"ch": "逝", "color": "red"}, {"ch": "容", "color": null}, {"ch": "節", "color": null}, {"ch": "敦", "color": null}, {"ch": "貞", "color": null}, {"ch": "淑", "color": null}, {"ch": "思", "color": null}, {"ch": "浮", "color": "red"}, {"ch": "懷", "color": "red"}, {"ch": "悲", "color": null}, {"ch": "哀", "color": null}, {"ch": "聲", "color": null}, {"ch": "殊", "color": null}, {"ch": "乖", "color": null}, {"ch": "分", "color": null}, {"ch": "聖", "color": "red"}, {"ch": "貲", "color": "blue"}, {"ch": "何", "color": "blue"}, {"ch": "情", "color": "blue"}, {"ch": "憂", "color": "blue"}, {"ch": "感", "color": "blue"}, {"ch": "惟", "color": "blue"}, {"ch": "哀", "color": "blue"}, {"ch": "志", "color": "blue"}, {"ch": "節", "color": "blue"}, {"ch": "上", "color": "blue"}, {"ch": "通", "color": "blue"}, {"ch": "神", "color": "blue"}, {"ch": "祇", "color": "blue"}, {"ch": "推", "color": "red"}, {"ch": "持", "color": null}, {"ch": "所", "color": null}, {"ch": "貞", "color": null}, {"ch": "記", "color": null}, {"ch": "自", "color": null}, {"ch": "恭", "color": null}, {"ch": "江", "color": "red"}, {"ch": "所", "color": "red"}, {"ch": "春", "color": null}, {"ch": "傷", "color": null}, {"ch": "應", "color": null}, {"ch": "翔", "color": null}, {"ch": "雁", "color": null}, {"ch": "歸", "color": null}, {"ch": "皇", "color": "red"}, {"ch": "辭", "color": "blue"}, {"ch": "成", "color": "blue"}, {"ch": "者", "color": "blue"}, {"ch": "作", "color": "blue"}, {"ch": "體", "color": "blue"}, {"ch": "下", "color": "blue"}, {"ch": "遺", "color": "blue"}, {"ch": "葑", "color": "blue"}, {"ch": "菲", "color": "blue"}, {"ch": "採", "color": "blue"}, {"ch": "者", "color": "blue"}, {"ch": "無", "color": "blue"}, {"ch": "差", "color": "blue"}, {"ch": "生", "color": "red"}, {"ch": "從", "color": null}, {"ch": "是", "color": null}, {"ch": "敬", "color": null}, {"ch": "孝", "color": null}, {"ch": "為", "color": null}, {"ch": "基", "color": null}, {"ch": "湘", "color": "red"}, {"ch": "親", "color": "red"}, {"ch": "剛", "color": "red"}, {"ch": "柔", "color": "red"}, {"ch": "有", "color": "red"}, {"ch": "女", "color": "red"}, {"ch": "為", "color": "red"}, {"ch": "賤", "color": "red"}, {"ch": "人", "color": "red"}, {"ch": "房", "color": "red"}, {"ch": "幽", "color": "red"}, {"ch": "處", "color": "red"}, {"ch": "己", "color": "red"}, {"ch": "憫", "color": "red"}, {"ch": "微", "color": "red"}, {"ch": "身", "color": "red"}, {"ch": "長", "color": "red"}, {"ch": "路", "color": "red"}, {"ch": "悲", "color": "red"}, {"ch": "曠", "color": "red"}, {"ch": "感", "color": "red"}, {"ch": "生", "color": "red"}, {"ch": "民", "color": "red"}, {"ch": "梁", "color": "red"}, {"ch": "山", "color": "red"}, {"ch": "殊", "color": "red"}, {"ch": "塞", "color": "red"}, {"ch": "隔", "color": "red"}, {"ch": "河", "color": "red"}, {"ch": "津", "color": "red"}];;
+
+const GRID_SIZE = 29;
+const CENTRAL = 14 * 29 + 14; // index 420 = row 14, col 14
+
+let grid = GRID_DATA;
+
+// =============================================================================
+// RENDER
+// =============================================================================
+
+const container = document.getElementById('grid');
+const sequenceEl = document.getElementById('sequence');
+const charCountEl = document.getElementById('charCount');
+const resultEl = document.getElementById('result');
+const translateBtn = document.getElementById('translateBtn');
+const errorEl = document.getElementById('errorMsg');
+
+let selected = []; // array of indices into grid
+
+function renderGrid() {
+    container.innerHTML = '';
+    for (let i = 0; i < grid.length; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const data = grid[i];
+        cell.textContent = data.ch;
+        if (data.color) cell.classList.add(data.color);
+        if (i === CENTRAL) cell.classList.add('central');
+        if (isSelected(i)) cell.classList.add('selected');
+        cell.dataset.idx = i;
+        cell.addEventListener('click', (e) => handleCellClick(e, i));
+        container.appendChild(cell);
+    }
+}
+
+function isSelected(idx) {
+    return selected.includes(idx);
+}
+
+function idxToRC(idx) {
+    return { r: Math.floor(idx / GRID_SIZE), c: idx % GRID_SIZE };
+}
+function rcToIdx(r, c) {
+    return r * GRID_SIZE + c;
+}
+
+function getLinearRange(from, to) {
+    const a = idxToRC(from), b = idxToRC(to);
+    const dr = b.r - a.r, dc = b.c - a.c;
+    const adr = Math.abs(dr), adc = Math.abs(dc);
+    // Must be horizontal, vertical, or diagonal
+    if (dr === 0 && dc === 0) return [from];
+    if (dr !== 0 && dc !== 0 && adr !== adc) return null; // not a valid line
+    if (dr === 0) {
+        // horizontal
+        const step = dc > 0 ? 1 : -1;
+        const res = [];
+        for (let c = a.c; c !== b.c + step; c += step) res.push(rcToIdx(a.r, c));
+        return res;
+    }
+    if (dc === 0) {
+        // vertical
+        const step = dr > 0 ? 1 : -1;
+        const res = [];
+        for (let r = a.r; r !== b.r + step; r += step) res.push(rcToIdx(r, a.c));
+        return res;
+    }
+    // diagonal
+    const rStep = dr > 0 ? 1 : -1;
+    const cStep = dc > 0 ? 1 : -1;
+    const res = [];
+    let r = a.r, c = a.c;
+    while (true) {
+        res.push(rcToIdx(r, c));
+        if (r === b.r && c === b.c) break;
+        r += rStep; c += cStep;
+    }
+    return res;
+}
+
+function handleCellClick(e, idx) {
+    if (e.altKey && selected.length > 0) {
+        const last = selected[selected.length - 1];
+        const range = getLinearRange(last, idx);
+        if (range) {
+            // Add all cells in range that aren't already selected
+            for (const i of range) {
+                if (!selected.includes(i)) selected.push(i);
+            }
+            updateSelection();
+            renderGrid();
+            return;
+        }
+        // Not a valid horizontal/vertical/diagonal line — do nothing
+        return;
+    }
+    // Normal toggle
+    const pos = selected.indexOf(idx);
+    if (pos >= 0) {
+        selected.splice(pos, 1);
+    } else {
+        selected.push(idx);
+    }
+    updateSelection();
+    renderGrid();
+}
+
+function toggleCell(idx) {
+    // fallback for direct calls (not used from clicks now)
+    const pos = selected.indexOf(idx);
+    if (pos >= 0) {
+        selected.splice(pos, 1);
+    } else {
+        selected.push(idx);
+    }
+    updateSelection();
+    renderGrid();
+}
+
+function updateSelection() {
+    const text = selected.map(i => grid[i].ch).join('');
+    sequenceEl.textContent = text;
+    charCountEl.textContent = `${text.length} char${text.length !== 1 ? 's' : ''}`;
+    translateBtn.disabled = text.length === 0;
+    errorEl.textContent = '';
+}
+
+function clearSelection() {
+    selected = [];
+    updateSelection();
+    renderGrid();
+    resultEl.textContent = '';
+    resultEl.classList.remove('loading');
+}
+
+function undoLast() {
+    selected.pop();
+    updateSelection();
+    renderGrid();
+}
+
+// =============================================================================
+// PROVIDER CONFIG
+// =============================================================================
+
+const OLLAMA_MODELS = [
+    { value: 'qwen3.6:35b-a3b', name: 'qwen3.6:35b-a3b' },
+    { value: 'qwen3.6:30b', name: 'qwen3.6:30b' },
+    { value: 'qwen2.5:14b', name: 'qwen2.5:14b' },
+    { value: 'custom', name: 'custom…' }
+];
+
+const OPENROUTER_MODELS = [
+    { value: 'qwen/qwen3-next-80b-a3b-instruct:free', name: 'Qwen3-Next-80B (free)' },
+    { value: 'custom', name: 'custom…' }
+];
+
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+function populateModels() {
+    const sel = document.getElementById('providerSelect');
+    const modelSel = document.getElementById('modelSelect');
+    const isOllama = !sel || sel.value === 'ollama';
+    const models = isOllama ? OLLAMA_MODELS : OPENROUTER_MODELS;
+    modelSel.innerHTML = '';
+    for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.value;
+        opt.textContent = m.name;
+        modelSel.appendChild(opt);
+    }
+}
+
+function updateProviderUI() {
+    const provider = document.getElementById('providerSelect').value;
+    const isOllama = provider === 'ollama';
+    document.getElementById('hostLabel').textContent = isOllama ? 'Ollama Host' : 'OpenRouter (fixed)';
+    const hostInput = document.getElementById('hostInput');
+    hostInput.readOnly = !isOllama;
+    hostInput.value = isOllama ? 'shadow.bonobo-dragon.ts.net:11434' : 'openrouter.ai (built-in)';
+    document.getElementById('keyLabel').style.display = isOllama ? 'none' : 'block';
+    document.getElementById('apiKeyInput').style.display = isOllama ? 'none' : 'block';
+    populateModels();
+}
+
+function getProviderConfig() {
+    const provider = document.getElementById('providerSelect').value;
+    let sel = document.getElementById('modelSelect').value;
+    if (sel === 'custom') {
+        const defaultModel = provider === 'ollama' ? 'qwen3.6:35b-a3b' : 'qwen/qwen3:free';
+        sel = prompt('Enter model name:', defaultModel) || defaultModel;
+    }
+    if (provider === 'ollama') {
+        const host = document.getElementById('hostInput').value.trim();
+        return { provider, url: `http://${host}/api/chat`, model: sel, headers: {}, isOpenAI: false };
+    } else {
+        const key = document.getElementById('apiKeyInput').value.trim();
+        return { provider, url: OPENROUTER_URL, model: sel, headers: { 'Authorization': `Bearer ${key}` }, isOpenAI: true };
+    }
+}
+
+async function checkConnection() {
+    const cfg = getProviderConfig();
+    setStatus('Testing…');
+    if (cfg.provider === 'ollama') {
+        const base = cfg.url.replace('/api/chat', '');
+        console.log('[init] Checking Ollama at', base);
+        try {
+            const res = await fetch(`${base}/api/tags`, { method: 'GET', mode: 'cors' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const names = (data.models || []).map(m => m.name).slice(0, 5).join(', ');
+            console.log('[init] Connected. Models:', (data.models || []).length);
+            setStatus(`Connected — ${data.models?.length || 0} models available`, true);
+            document.getElementById('modelStatus').textContent = `Models: ${names}…`;
+        } catch (e) {
+            console.warn('[init] Connection check failed:', e.message);
+            setStatus(`Connection failed — ${e.message}`, false);
+            document.getElementById('modelStatus').textContent = 'Check Ollama CORS/network';
+        }
+    } else {
+        const key = document.getElementById('apiKeyInput').value.trim();
+        if (!key) {
+            setStatus('OpenRouter: add API key', false);
+            document.getElementById('modelStatus').textContent = 'Free models at openrouter.ai';
+            return;
+        }
+        console.log('[init] Checking OpenRouter key…');
+        try {
+            const res = await fetch(OPENROUTER_URL, {
+                method: 'POST',
+                headers: { ...cfg.headers, 'Content-Type': 'application/json' },
+                mode: 'cors',
+                body: JSON.stringify({ model: cfg.model, messages: [{role:'user',content:'hi'}], max_tokens: 1 })
+            });
+            if (res.ok || res.status === 402 || res.status === 429) {
+                setStatus('OpenRouter key valid', true);
+                document.getElementById('modelStatus').textContent = `Model: ${cfg.model}`;
+            } else {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error?.message || `HTTP ${res.status}`);
+            }
+        } catch (e) {
+            console.warn('[init] OpenRouter check failed:', e.message);
+            setStatus(`OpenRouter failed — ${e.message}`, false);
+            document.getElementById('modelStatus').textContent = 'Check key and model name';
+        }
+    }
+}
+
+function setStatus(msg, ok) {
+    const el = document.getElementById('connStatus');
+    el.textContent = msg;
+    el.className = ok ? 'ok' : ok === false ? 'err' : '';
+}
+
+function mdToHtml(text) {
+    // Very small markdown parser: *italic* and **bold**
+    let html = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        .replace(/_(.+?)_/g, '<em>$1</em>');
+    return html;
+}
+
+function toggleThinking() {
+    const el = document.getElementById('thinkingContent');
+    const arrowEl = document.getElementById('thinkingArrow');
+    el.classList.toggle('open');
+    arrowEl.textContent = el.classList.contains('open') ? '▼' : '▶';
+}
+
+function updateThinkingPanel(thinkingContent) {
+    const panel = document.getElementById('thinkingPanel');
+    const content = document.getElementById('thinkingContent');
+    const count = document.getElementById('thinkingCount');
+    if (!thinkingContent) {
+        panel.style.display = 'none';
+        return;
+    }
+    panel.style.display = 'block';
+    content.textContent = thinkingContent;
+    // Rough token count: ~4 chars per token
+    count.textContent = `${Math.round(thinkingContent.length / 4)} thinking tokens`;
+}
+
+async function translateSequence() {
+    const text = selected.map(i => grid[i].ch).join('');
+    if (!text) return;
+    console.log('[translate] Sequence:', text);
+
+    const cfg = getProviderConfig();
+    resultEl.innerHTML = '';
+    resultEl.classList.add('loading');
+    errorEl.textContent = '';
+    translateBtn.disabled = true;
+    updateThinkingPanel('');
+
+    const showReasoning = document.getElementById('showThinking').checked;
+
+    const userPrompt = `You are a classical Chinese poetry expert translating a sequence from the Star Gauge (璇璣圖), a 4th-century palindrome poem by Lady Su Hui.
+
+Sequence: ${text}
+
+**Output format rules — follow these exactly:**
+1. FIRST, give a fluid English poetic translation. Put it entirely in markdown italics using *asterisks* around the whole translation block.
+2. THEN, after a blank line, give any elaboration: literal character-by-character gloss, notable ambiguities, alternate readings, or historical context.
+
+Keep the poetic translation concise and standalone. Everything else is secondary commentary. Respond in plain text with markdown formatting.`;
+
+    let responseContent = '';
+    let thinkingContent = '';
+    let chunkCount = 0;
+
+    try {
+        console.log('[translate] Fetching (streaming)', cfg.provider, cfg.url, 'model:', cfg.model, 'think:', showReasoning);
+        let requestBody;
+        if (cfg.isOpenAI) {
+            requestBody = {
+                model: cfg.model,
+                messages: [
+                    { role: 'system', content: 'You are a classical Chinese poetry scholar specializing in the Star Gauge (璇璣圖) by Lady Su Hui, a 4th-century silk brocade palindrome poem. Be concise but insightful.' },
+                    { role: 'user', content: userPrompt }
+                ],
+                temperature: 0.3,
+                stream: true
+            };
+        } else {
+            requestBody = {
+                model: cfg.model,
+                messages: [
+                    { role: 'system', content: 'You are a classical Chinese poetry scholar specializing in the Star Gauge (璇璣圖) by Lady Su Hui, a 4th-century silk brocade palindrome poem. Be concise but insightful.' },
+                    { role: 'user', content: userPrompt }
+                ],
+                think: showReasoning,
+                stream: true,
+                options: { temperature: 0.3, num_ctx: 4096 }
+            };
+        }
+        const headers = cfg.isOpenAI
+            ? { ...cfg.headers, 'Content-Type': 'application/json', 'HTTP-Referer': location.href, 'X-Title': 'Star Gauge Reader' }
+            : { 'Content-Type': 'application/json' };
+        const res = await fetch(cfg.url, {
+            method: 'POST',
+            headers,
+            mode: 'cors',
+            body: JSON.stringify(requestBody)
+        });
+        console.log('[translate] Response status:', res.status, 'ok:', res.ok);
+
+        if (!res.ok) {
+            const err = await res.text().catch(() => '');
+            throw new Error(`HTTP ${res.status}: ${err.slice(0, 200)}`);
+        }
+
+        if (!res.body) {
+            throw new Error('Response body is null — streaming not supported by this browser?');
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) { console.log('[translate] Stream reader done'); break; }
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // keep incomplete line
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                // OpenRouter SSE format: lines may start with "data: "
+                let dataLine = line;
+                if (cfg.isOpenAI && line.startsWith('data: ')) {
+                    dataLine = line.slice(6);
+                }
+                if (cfg.isOpenAI && dataLine === '[DONE]') {
+                    console.log('[translate] SSE [DONE] received after', chunkCount, 'chunks');
+                    break;
+                }
+                try {
+                    const chunk = JSON.parse(dataLine);
+                    chunkCount++;
+                    let contentPiece = '';
+                    let reasoningPiece = '';
+
+                    if (cfg.isOpenAI) {
+                        // OpenRouter / OpenAI format
+                        const delta = chunk.choices?.[0]?.delta;
+                        if (delta) {
+                            contentPiece = delta.content || '';
+                            reasoningPiece = delta.reasoning || delta.reasoning_content || '';
+                        }
+                        // Also handle finish_reason
+                        if (chunk.choices?.[0]?.finish_reason) {
+                            console.log('[translate] finish_reason:', chunk.choices[0].finish_reason);
+                        }
+                    } else {
+                        // Ollama format
+                        const msg = chunk.message || {};
+                        contentPiece = msg.content || '';
+                        reasoningPiece = msg.thinking || chunk.thinking || chunk.reasoning || '';
+                    }
+
+                    // Accumulate response
+                    if (contentPiece) {
+                        responseContent += contentPiece;
+                        resultEl.classList.remove('loading');
+                        resultEl.innerHTML = mdToHtml(responseContent);
+                    }
+                    // Accumulate thinking
+                    if (reasoningPiece) {
+                        thinkingContent += reasoningPiece;
+                        if (document.getElementById('showThinking').checked) {
+                            updateThinkingPanel(thinkingContent);
+                        }
+                    }
+
+                    // Early chunk logging
+                    if (chunkCount <= 3) {
+                        console.log('[translate] Chunk', chunkCount, 'contentLen:', contentPiece.length, 'reasoningLen:', reasoningPiece.length,
+                                    'isOpenAI:', cfg.isOpenAI);
+                    }
+
+                    if (!cfg.isOpenAI && chunk.done) {
+                        console.log('[translate] Final chunk received after', chunkCount,
+                            'chunks. Content length:', responseContent.length,
+                            'Thinking length:', thinkingContent.length);
+                        break;
+                    }
+                } catch (parseErr) {
+                    console.warn('[translate] JSON parse error on line:', dataLine.slice(0, 100), parseErr.message);
+                }
+            }
+        }
+
+        // Finalize display
+        resultEl.classList.remove('loading');
+        if (!responseContent && thinkingContent) {
+            // Model only produced thinking — display it as fallback
+            resultEl.innerHTML = mdToHtml(thinkingContent);
+        } else if (!responseContent) {
+            resultEl.innerHTML = '<em style="color:var(--muted)">(empty response — check model availability)</em>';
+        }
+
+        // Show/hide thinking panel based on toggle and availability
+        if (thinkingContent && document.getElementById('showThinking').checked) {
+            updateThinkingPanel(thinkingContent);
+        } else {
+            document.getElementById('thinkingPanel').style.display = 'none';
+        }
+    } catch (e) {
+        console.error('[translate] Error:', e);
+        let userMsg = e.message || String(e);
+        if (e.name === 'TypeError' && (userMsg.includes('Load failed') || userMsg === 'TypeError')) {
+            const provider = document.getElementById('providerSelect').value;
+            if (provider === 'ollama') {
+                userMsg = 'Cannot reach Ollama server. Check: (1) Ollama is running, (2) OLLAMA_HOST=0.0.0.0:11434 is set, (3) CORS is enabled, (4) host in settings is correct.';
+            } else {
+                userMsg = 'Cannot reach OpenRouter. Check internet connection and API key.';
+            }
+        }
+        errorEl.textContent = `Error: ${userMsg}`;
+        resultEl.classList.remove('loading');
+        if (!responseContent) {
+            resultEl.innerHTML = '';
+        }
+    } finally {
+        resultEl.classList.remove('loading');
+        translateBtn.disabled = false;
+    }
+}
+
+// =============================================================================
+// INIT
+// =============================================================================
+
+renderGrid();
+setStatus('Ready');
+console.log('[init] Star Gauge reader loaded. Console errors above may be from prior loads — look for this message as the fresh-start marker.');
+
+// Initialize provider UI
+updateProviderUI();
+
+// Auto-detect on load
+setTimeout(() => {
+    checkConnection().catch(() => {});
+}, 500);
+
+// Reasoning toggle listener — hides panel when disabled
+document.getElementById('showThinking').addEventListener('change', () => {
+    if (!document.getElementById('showThinking').checked) {
+        document.getElementById('thinkingPanel').style.display = 'none';
+    }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') clearSelection();
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !translateBtn.disabled) translateSequence();
+    if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); undoLast(); }
+});
+</script>
+</body>
+</html>
