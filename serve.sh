@@ -10,5 +10,5 @@ if lsof -i :"$PORT" >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "Starting server on http://127.0.0.1:$PORT ..."
-python3 -m http.server "$PORT"
+echo "Starting server on http://0.0.0.0:$PORT ..."
+python3 -m http.server "$PORT" --bind 0.0.0.0
