@@ -377,22 +377,7 @@
 <header>
     <h1>Star Gauge <span>璇璣圖 · Interactive Reader</span></h1>
     <div class="controls">
-        <label>Provider</label>
-        <select id="providerSelect" onchange="updateProviderUI()">
-            <option value="ollama">Ollama (local)</option>
-            <option value="openrouter">OpenRouter (public)</option>
-        </select>
-        <label id="hostLabel">Ollama Host</label>
-        <input type="text" id="hostInput" value="shadow.bonobo-dragon.ts.net:11434" placeholder="host:port">
-        <label id="keyLabel" style="display:none">OpenRouter Key</label>
-        <input type="password" id="apiKeyInput" placeholder="sk-or-v1-…" style="display:none;min-width:180px;">
-        <label id="modelLabel">Model</label>
-        <select id="modelSelect"></select>
-        <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;" title="When unchecked, model will not show its reasoning chain">
-            <input type="checkbox" id="showThinking" style="cursor:pointer;">
-            Reasoning
-        </label>
-        <button onclick="checkConnection()">Test</button>
+        <span style="color:var(--muted);font-size:0.8rem;">Powered by OpenRouter</span>
     </div>
 </header>
 
@@ -426,18 +411,12 @@
         <div class="translation-panel">
             <h2>Translation</h2>
             <div class="result-box" id="result"></div>
-            <div class="thinking-panel" id="thinkingPanel" style="display:none">
-                <div class="thinking-header" id="thinkingHeader" onclick="toggleThinking()">
-                    <span><span id="thinkingArrow">▶</span> 🧠 Model reasoning</span>
-                    <span class="count" id="thinkingCount">0 thinking tokens</span>
-                </div>
-                <div class="thinking-content" id="thinkingContent"></div>
-            </div>
+
         </div>
 
         <div class="status-bar">
             <span id="connStatus">Ready</span>
-            <span id="modelStatus">Select a provider and model above</span>
+            <span id="modelStatus">openrouter/free</span>
         </div>
     </div>
 </div>
@@ -460,37 +439,6 @@ const GRID_SIZE = 29;
 const CENTRAL = 14 * 29 + 14; // index 420 = row 14, col 14
 
 let grid = GRID_DATA;
-
-// =============================================================================
-// SETTINGS PERSISTENCE
-// =============================================================================
-
-const SETTINGS = {
-    provider: 'sg_provider',
-    host: 'sg_host',
-    apiKey: 'sg_apiKey',
-    model: 'sg_model',
-    showThinking: 'sg_showThinking'
-};
-
-function saveSettings() {
-    localStorage.setItem(SETTINGS.provider, document.getElementById('providerSelect').value);
-    localStorage.setItem(SETTINGS.host, document.getElementById('hostInput').value);
-    localStorage.setItem(SETTINGS.apiKey, document.getElementById('apiKeyInput').value);
-    localStorage.setItem(SETTINGS.model, document.getElementById('modelSelect').value);
-    localStorage.setItem(SETTINGS.showThinking, document.getElementById('showThinking').checked);
-}
-
-function loadSettings() {
-    const provider = localStorage.getItem(SETTINGS.provider);
-    if (provider) document.getElementById('providerSelect').value = provider;
-    const host = localStorage.getItem(SETTINGS.host);
-    if (host) document.getElementById('hostInput').value = host;
-    const apiKey = localStorage.getItem(SETTINGS.apiKey);
-    if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
-    const showThinking = localStorage.getItem(SETTINGS.showThinking);
-    if (showThinking !== null) document.getElementById('showThinking').checked = showThinking === 'true';
-}
 
 // =============================================================================
 // RENDER
@@ -704,117 +652,30 @@ function undoLast() {
 }
 
 // =============================================================================
-// PROVIDER CONFIG
+// PUBLISH BRANCH — HARDCODED OPENROUTER CONFIG
 // =============================================================================
 
-const OLLAMA_MODELS = [
-    { value: 'qwen3.6:35b-a3b', name: 'qwen3.6:35b-a3b' },
-    { value: 'qwen3.6:30b', name: 'qwen3.6:30b' },
-    { value: 'qwen2.5:14b', name: 'qwen2.5:14b' },
-    { value: 'custom', name: 'custom…' }
-];
-
-const OPENROUTER_MODELS = [
-    { value: 'qwen/qwen3-next-80b-a3b-instruct:free', name: 'Qwen3-Next-80B (free)' },
-    { value: 'custom', name: 'custom…' }
-];
-
+const OPENROUTER_KEY = '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';
+const OPENROUTER_MODEL = 'openrouter/free';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 function populateModels() {
-    const sel = document.getElementById('providerSelect');
-    const modelSel = document.getElementById('modelSelect');
-    const isOllama = !sel || sel.value === 'ollama';
-    const models = isOllama ? OLLAMA_MODELS : OPENROUTER_MODELS;
-    modelSel.innerHTML = '';
-    for (const m of models) {
-        const opt = document.createElement('option');
-        opt.value = m.value;
-        opt.textContent = m.name;
-        modelSel.appendChild(opt);
-    }
+    // No-op in publish branch
 }
 
 function updateProviderUI() {
-    const provider = document.getElementById('providerSelect').value;
-    const isOllama = provider === 'ollama';
-    document.getElementById('hostLabel').textContent = isOllama ? 'Ollama Host' : 'OpenRouter (fixed)';
-    const hostInput = document.getElementById('hostInput');
-    hostInput.readOnly = !isOllama;
-    if (!isOllama) hostInput.value = 'openrouter.ai (built-in)';
-    document.getElementById('keyLabel').style.display = isOllama ? 'none' : 'block';
-    document.getElementById('apiKeyInput').style.display = isOllama ? 'none' : 'block';
-    populateModels();
-    const savedModel = localStorage.getItem('sg_model');
-    if (savedModel) {
-        const opt = document.querySelector(`#modelSelect option[value="${savedModel}"]`);
-        if (opt) document.getElementById('modelSelect').value = savedModel;
-    }
+    // No-op in publish branch
 }
 
 function getProviderConfig() {
-    const provider = document.getElementById('providerSelect').value;
-    let sel = document.getElementById('modelSelect').value;
-    if (sel === 'custom') {
-        const defaultModel = provider === 'ollama' ? 'qwen3.6:35b-a3b' : 'qwen/qwen3:free';
-        sel = prompt('Enter model name:', defaultModel) || defaultModel;
-    }
-    if (provider === 'ollama') {
-        const host = document.getElementById('hostInput').value.trim();
-        return { provider, url: `http://${host}/api/chat`, model: sel, headers: {}, isOpenAI: false };
-    } else {
-        const key = document.getElementById('apiKeyInput').value.trim();
-        return { provider, url: OPENROUTER_URL, model: sel, headers: { 'Authorization': `Bearer ${key}` }, isOpenAI: true };
-    }
-}
-
-async function checkConnection() {
-    const cfg = getProviderConfig();
-    setStatus('Testing…');
-    if (cfg.provider === 'ollama') {
-        const base = cfg.url.replace('/api/chat', '');
-        console.log('[init] Checking Ollama at', base);
-        try {
-            const res = await fetch(`${base}/api/tags`, { method: 'GET', mode: 'cors' });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            const names = (data.models || []).map(m => m.name).slice(0, 5).join(', ');
-            console.log('[init] Connected. Models:', (data.models || []).length);
-            setStatus(`Connected — ${data.models?.length || 0} models available`, true);
-            document.getElementById('modelStatus').textContent = `Models: ${names}…`;
-        } catch (e) {
-            console.warn('[init] Connection check failed:', e.message);
-            setStatus(`Connection failed — ${e.message}`, false);
-            document.getElementById('modelStatus').textContent = 'Check Ollama CORS/network';
-        }
-    } else {
-        const key = document.getElementById('apiKeyInput').value.trim();
-        if (!key) {
-            setStatus('OpenRouter: add API key', false);
-            document.getElementById('modelStatus').textContent = 'Free models at openrouter.ai';
-            return;
-        }
-        console.log('[init] Checking OpenRouter key…');
-        try {
-            const res = await fetch(OPENROUTER_URL, {
-                method: 'POST',
-                headers: { ...cfg.headers, 'Content-Type': 'application/json' },
-                mode: 'cors',
-                body: JSON.stringify({ model: cfg.model, messages: [{role:'user',content:'hi'}], max_tokens: 1 })
-            });
-            if (res.ok || res.status === 402 || res.status === 429) {
-                setStatus('OpenRouter key valid', true);
-                document.getElementById('modelStatus').textContent = `Model: ${cfg.model}`;
-            } else {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.error?.message || `HTTP ${res.status}`);
-            }
-        } catch (e) {
-            console.warn('[init] OpenRouter check failed:', e.message);
-            setStatus(`OpenRouter failed — ${e.message}`, false);
-            document.getElementById('modelStatus').textContent = 'Check key and model name';
-        }
-    }
+    return {
+        provider: 'openrouter',
+        url: OPENROUTER_URL,
+        model: OPENROUTER_MODEL,
+        headers: { 'Authorization': `Bearer ${OPENROUTER_KEY}` },
+        isOpenAI: true,
+        isStreaming: true
+    };
 }
 
 function setStatus(msg, ok) {
@@ -834,27 +695,6 @@ function mdToHtml(text) {
     return html;
 }
 
-function toggleThinking() {
-    const el = document.getElementById('thinkingContent');
-    const arrowEl = document.getElementById('thinkingArrow');
-    el.classList.toggle('open');
-    arrowEl.textContent = el.classList.contains('open') ? '▼' : '▶';
-}
-
-function updateThinkingPanel(thinkingContent) {
-    const panel = document.getElementById('thinkingPanel');
-    const content = document.getElementById('thinkingContent');
-    const count = document.getElementById('thinkingCount');
-    if (!thinkingContent) {
-        panel.style.display = 'none';
-        return;
-    }
-    panel.style.display = 'block';
-    content.textContent = thinkingContent;
-    // Rough token count: ~4 chars per token
-    count.textContent = `${Math.round(thinkingContent.length / 4)} thinking tokens`;
-}
-
 async function translateSequence() {
     const text = selected.map(i => grid[i].ch).join('');
     if (!text) return;
@@ -865,9 +705,6 @@ async function translateSequence() {
     resultEl.classList.add('loading');
     errorEl.textContent = '';
     translateBtn.disabled = true;
-    updateThinkingPanel('');
-
-    const showReasoning = document.getElementById('showThinking').checked;
 
     const userPrompt = `You are a classical Chinese poetry expert translating a sequence from the Star Gauge (璇璣圖), a 4th-century palindrome poem by Lady Su Hui.
 
@@ -880,11 +717,10 @@ Sequence: ${text}
 Keep the poetic translation concise and standalone. Everything else is secondary commentary. Respond in plain text with markdown formatting.`;
 
     let responseContent = '';
-    let thinkingContent = '';
     let chunkCount = 0;
 
     try {
-        console.log('[translate] Fetching (streaming)', cfg.provider, cfg.url, 'model:', cfg.model, 'think:', showReasoning);
+        console.log('[translate] Fetching (streaming)', cfg.provider, cfg.url, 'model:', cfg.model);
         let requestBody;
         if (cfg.isOpenAI) {
             requestBody = {
@@ -903,7 +739,6 @@ Keep the poetic translation concise and standalone. Everything else is secondary
                     { role: 'system', content: 'You are a classical Chinese poetry scholar specializing in the Star Gauge (璇璣圖) by Lady Su Hui, a 4th-century silk brocade palindrome poem. Be concise but insightful.' },
                     { role: 'user', content: userPrompt }
                 ],
-                think: showReasoning,
                 stream: true,
                 options: { temperature: 0.3, num_ctx: 4096 }
             };
@@ -953,14 +788,12 @@ Keep the poetic translation concise and standalone. Everything else is secondary
                     const chunk = JSON.parse(dataLine);
                     chunkCount++;
                     let contentPiece = '';
-                    let reasoningPiece = '';
 
                     if (cfg.isOpenAI) {
                         // OpenRouter / OpenAI format
                         const delta = chunk.choices?.[0]?.delta;
                         if (delta) {
                             contentPiece = delta.content || '';
-                            reasoningPiece = delta.reasoning || delta.reasoning_content || '';
                         }
                         // Also handle finish_reason
                         if (chunk.choices?.[0]?.finish_reason) {
@@ -970,7 +803,6 @@ Keep the poetic translation concise and standalone. Everything else is secondary
                         // Ollama format
                         const msg = chunk.message || {};
                         contentPiece = msg.content || '';
-                        reasoningPiece = msg.thinking || chunk.thinking || chunk.reasoning || '';
                     }
 
                     // Accumulate response
@@ -979,24 +811,16 @@ Keep the poetic translation concise and standalone. Everything else is secondary
                         resultEl.classList.remove('loading');
                         resultEl.innerHTML = mdToHtml(responseContent);
                     }
-                    // Accumulate thinking
-                    if (reasoningPiece) {
-                        thinkingContent += reasoningPiece;
-                        if (document.getElementById('showThinking').checked) {
-                            updateThinkingPanel(thinkingContent);
-                        }
-                    }
 
                     // Early chunk logging
                     if (chunkCount <= 3) {
-                        console.log('[translate] Chunk', chunkCount, 'contentLen:', contentPiece.length, 'reasoningLen:', reasoningPiece.length,
+                        console.log('[translate] Chunk', chunkCount, 'contentLen:', contentPiece.length,
                                     'isOpenAI:', cfg.isOpenAI);
                     }
 
                     if (!cfg.isOpenAI && chunk.done) {
                         console.log('[translate] Final chunk received after', chunkCount,
-                            'chunks. Content length:', responseContent.length,
-                            'Thinking length:', thinkingContent.length);
+                            'chunks. Content length:', responseContent.length);
                         break;
                     }
                 } catch (parseErr) {
@@ -1007,29 +831,14 @@ Keep the poetic translation concise and standalone. Everything else is secondary
 
         // Finalize display
         resultEl.classList.remove('loading');
-        if (!responseContent && thinkingContent) {
-            // Model only produced thinking — display it as fallback
-            resultEl.innerHTML = mdToHtml(thinkingContent);
-        } else if (!responseContent) {
+        if (!responseContent) {
             resultEl.innerHTML = '<em style="color:var(--muted)">(empty response — check model availability)</em>';
-        }
-
-        // Show/hide thinking panel based on toggle and availability
-        if (thinkingContent && document.getElementById('showThinking').checked) {
-            updateThinkingPanel(thinkingContent);
-        } else {
-            document.getElementById('thinkingPanel').style.display = 'none';
         }
     } catch (e) {
         console.error('[translate] Error:', e);
         let userMsg = e.message || String(e);
         if (e.name === 'TypeError' && (userMsg.includes('Load failed') || userMsg === 'TypeError')) {
-            const provider = document.getElementById('providerSelect').value;
-            if (provider === 'ollama') {
-                userMsg = 'Cannot reach Ollama server. Check: (1) Ollama is running, (2) OLLAMA_HOST=0.0.0.0:11434 is set, (3) CORS is enabled, (4) host in settings is correct.';
-            } else {
-                userMsg = 'Cannot reach OpenRouter. Check internet connection and API key.';
-            }
+            userMsg = 'Cannot reach OpenRouter. Check internet connection.';
         }
         errorEl.textContent = `Error: ${userMsg}`;
         resultEl.classList.remove('loading');
@@ -1047,31 +856,13 @@ Keep the poetic translation concise and standalone. Everything else is secondary
 // =============================================================================
 
 renderGrid();
-setStatus('Ready');
-console.log('[init] Star Gauge reader loaded. Console errors above may be from prior loads — look for this message as the fresh-start marker.');
-
-// Initialize provider UI
-loadSettings();
-updateProviderUI();
+setStatus('Powered by OpenRouter');
+console.log('[init] Star Gauge reader loaded. Publish branch.');
 
 // Auto-detect on load
 setTimeout(() => {
-    checkConnection().catch(() => {});
+    console.log('[init] Ready');
 }, 500);
-
-// Reasoning toggle listener — hides panel when disabled
-document.getElementById('showThinking').addEventListener('change', () => {
-    saveSettings();
-    if (!document.getElementById('showThinking').checked) {
-        document.getElementById('thinkingPanel').style.display = 'none';
-    }
-});
-
-// Persist settings on change
-document.getElementById('providerSelect').addEventListener('change', saveSettings);
-document.getElementById('hostInput').addEventListener('change', saveSettings);
-document.getElementById('apiKeyInput').addEventListener('change', saveSettings);
-document.getElementById('modelSelect').addEventListener('change', saveSettings);
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
